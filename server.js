@@ -111,13 +111,38 @@ function analytics() {
   const daily = series.map((p,i)=>({ date:p.date, total:p.total, pnl: i===0 ? p.total - startTotal : p.total - series[i-1].total }));
   const weekPnL = daily.slice(-7).reduce((a,d)=>a+d.pnl,0);
   const monthPnL = daily.slice(-30).reduce((a,d)=>a+d.pnl,0);
-  let peak = startTotal || 0, maxDrawdown = 0;
-  for (const p of series) { peak = Math.max(peak, p.total); maxDrawdown = Math.min(maxDrawdown, p.total - peak); }
+  let peak = startTotal || 0, maxDrawdown = 0, seasonHigh = startTotal || 0, seasonLow = startTotal || currentTotal || 0, peakROI = 0;
+  const drawdownSeries = [];
+  for (const p of series) {
+    peak = Math.max(peak, p.total);
+    seasonHigh = Math.max(seasonHigh, p.total);
+    seasonLow = Math.min(seasonLow, p.total);
+    const dd = p.total - peak;
+    maxDrawdown = Math.min(maxDrawdown, dd);
+    const roi = startTotal ? ((p.total - startTotal) / startTotal) * 100 : 0;
+    peakROI = Math.max(peakROI, roi);
+    drawdownSeries.push({ date: p.date, drawdown: dd, drawdownPct: peak ? (dd / peak) * 100 : 0 });
+  }
+  seasonHigh = Math.max(seasonHigh, currentTotal);
+  seasonLow = Math.min(seasonLow, currentTotal);
+  const currentDrawdown = currentTotal - seasonHigh;
+  const currentDrawdownPct = seasonHigh ? (currentDrawdown / seasonHigh) * 100 : 0;
   const best = daily.length ? daily.reduce((a,b)=>b.pnl>a.pnl?b:a,daily[0]) : null;
   const worst = daily.length ? daily.reduce((a,b)=>b.pnl<a.pnl?b:a,daily[0]) : null;
-  const yesterday = daily.length ? daily[daily.length-1].pnl : currentTotal - startTotal;
-  const booksRanked = bks.map(b => ({ id:b.id, name:b.name, starting:Number(b.starting_balance), current:Number(b.current_balance), pnl:Number(b.current_balance)-Number(b.starting_balance), roi:Number(b.starting_balance) ? ((Number(b.current_balance)-Number(b.starting_balance))/Number(b.starting_balance))*100 : 0, share: currentTotal ? Number(b.current_balance)/currentTotal*100 : 0 })).sort((a,b)=>b.pnl-a.pnl);
-  return { startTotal, cashReserve, bookStartTotal, currentTotal, netPnL: currentTotal-startTotal, roi: startTotal ? (currentTotal-startTotal)/startTotal*100 : 0, todayPnL: yesterday, weekPnL, monthPnL, maxDrawdown, best, worst, series, daily, booksRanked, snapshotCount: snaps.length };
+  const latestPnL = daily.length ? daily[daily.length-1].pnl : currentTotal - startTotal;
+  const monthly = {};
+  daily.forEach(d => { const key = String(d.date).slice(0,7); if (!monthly[key]) monthly[key] = { month:key, pnl:0, ending:d.total }; monthly[key].pnl += d.pnl; monthly[key].ending = d.total; });
+  const monthlySeries = Object.values(monthly).map(m => ({...m, roi: startTotal ? (m.pnl / startTotal) * 100 : 0}));
+  const booksRanked = bks.map(b => ({
+    id:b.id,
+    name:b.name,
+    starting:Number(b.starting_balance),
+    current:Number(b.current_balance),
+    pnl:Number(b.current_balance)-Number(b.starting_balance),
+    roi:Number(b.starting_balance) ? ((Number(b.current_balance)-Number(b.starting_balance))/Number(b.starting_balance))*100 : 0,
+    share: currentTotal ? Number(b.current_balance)/currentTotal*100 : 0
+  })).sort((a,b)=>b.pnl-a.pnl);
+  return { startTotal, cashReserve, bookStartTotal, currentTotal, netPnL: currentTotal-startTotal, roi: startTotal ? (currentTotal-startTotal)/startTotal*100 : 0, todayPnL: latestPnL, weekPnL, monthPnL, maxDrawdown, currentDrawdown, currentDrawdownPct, seasonHigh, seasonLow, peakROI, best, worst, series, daily, drawdownSeries, monthlySeries, booksRanked, snapshotCount: snaps.length };
 }
 
 function verification() {
@@ -140,7 +165,7 @@ function verification() {
   };
 }
 
-function snapshotHistory(limit = 25) {
+function snapshotHistory(limit = 100) {
   const snaps = db.prepare('SELECT * FROM daily_snapshots ORDER BY snapshot_date DESC, id DESC LIMIT ?').all(limit);
   const stmt = db.prepare(`SELECT sb.*, s.name FROM snapshot_balances sb JOIN sportsbooks s ON s.id=sb.sportsbook_id WHERE snapshot_id=? ORDER BY s.id`);
   return snaps.map(s => {
@@ -174,7 +199,7 @@ app.get('/api/state', auth, (req,res)=>{
     latestSnapshot: latestSnapshot(),
     analytics: analytics(),
     verification: verification(),
-    snapshots: snapshotHistory(25)
+    snapshots: snapshotHistory(100)
   });
 });
 app.post('/api/setup', auth, (req,res)=>{
@@ -250,7 +275,7 @@ app.post('/api/daily-close', auth, (req,res)=>{
     latestSnapshot: latestSnapshot(),
     analytics: analytics(),
     verification: verification(),
-    snapshots: snapshotHistory(25)
+    snapshots: snapshotHistory(100)
   });
 });
 
@@ -296,8 +321,71 @@ app.post('/api/reset/all', auth, (req,res)=>{
   res.json({ ok:true, message:'All bankroll data reset. Security password preserved.' });
 });
 
+
+function backupPayload() {
+  return {
+    app: 'Bankroll Accounting Pro',
+    version: '1.1.0',
+    exported_at: new Date().toISOString(),
+    settings: db.prepare('SELECT key, value FROM settings ORDER BY key').all(),
+    sportsbooks: db.prepare('SELECT * FROM sportsbooks ORDER BY id').all(),
+    daily_snapshots: db.prepare('SELECT * FROM daily_snapshots ORDER BY id').all(),
+    snapshot_balances: db.prepare('SELECT * FROM snapshot_balances ORDER BY id').all()
+  };
+}
+
+app.get('/api/backup/json', auth, (req,res)=>{
+  const body = JSON.stringify(backupPayload(), null, 2);
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename=bankroll-backup-${new Date().toISOString().slice(0,10)}.json`);
+  res.send(body);
+});
+
+app.post('/api/restore/json', auth, (req,res)=>{
+  const payload = req.body || {};
+  if (!Array.isArray(payload.settings) || !Array.isArray(payload.sportsbooks) || !Array.isArray(payload.daily_snapshots) || !Array.isArray(payload.snapshot_balances)) {
+    return res.status(400).json({ error:'Invalid backup file.' });
+  }
+  const currentHash = setting('passwordHash');
+  const currentMode = setting('passwordMode');
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM snapshot_balances').run();
+    db.prepare('DELETE FROM daily_snapshots').run();
+    db.prepare('DELETE FROM sportsbooks').run();
+    db.prepare('DELETE FROM settings').run();
+    const setStmt = db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)');
+    payload.settings.forEach(r => {
+      if (r.key !== 'passwordHash' && r.key !== 'passwordMode') setStmt.run(String(r.key), String(r.value));
+    });
+    if (currentHash) setStmt.run('passwordHash', currentHash);
+    if (currentMode) setStmt.run('passwordMode', currentMode);
+    const bookStmt = db.prepare('INSERT INTO sportsbooks(id,name,starting_balance,current_balance,active,created_at,updated_at) VALUES(?,?,?,?,?,?,?)');
+    payload.sportsbooks.forEach(r => bookStmt.run(r.id, r.name, Number(r.starting_balance||0), Number(r.current_balance||0), Number(r.active ?? 1), r.created_at || new Date().toISOString(), r.updated_at || new Date().toISOString()));
+    const snapStmt = db.prepare('INSERT INTO daily_snapshots(id,snapshot_date,notes,created_at) VALUES(?,?,?,?)');
+    payload.daily_snapshots.forEach(r => snapStmt.run(r.id, r.snapshot_date, r.notes || '', r.created_at || new Date().toISOString()));
+    const balStmt = db.prepare('INSERT INTO snapshot_balances(id,snapshot_id,sportsbook_id,balance) VALUES(?,?,?,?)');
+    payload.snapshot_balances.forEach(r => balStmt.run(r.id, r.snapshot_id, r.sportsbook_id, Number(r.balance||0)));
+  });
+  tx();
+  res.json({ ok:true, message:'Backup restored.' });
+});
+
 app.get('/api/export/:type', auth, (req,res)=>{
   const a = analytics(); const bks = books(); const snaps = allSnapshots(); const type = req.params.type;
+  if (type === 'csv') {
+    const rows = [['Date','Total Bankroll','Change','ROI %','Notes']];
+    let prevTotal = a.startTotal;
+    snaps.forEach(s => {
+      const total = s.balances.reduce((x,y)=>x+Number(y.balance),0) + a.cashReserve;
+      const change = total - prevTotal;
+      rows.push([s.snapshot_date,total.toFixed(2),change.toFixed(2),(a.startTotal ? ((total-a.startTotal)/a.startTotal*100) : 0).toFixed(2),String(s.notes||'').replace(/"/g,'""')]);
+      prevTotal = total;
+    });
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    res.setHeader('Content-Type','text/csv');
+    res.setHeader('Content-Disposition','attachment; filename=bankroll-history.csv');
+    return res.send(csv);
+  }
   const lines = [];
   lines.push(`# Bankroll Report - ${setting('handlerName')}`);
   lines.push(`Generated: ${new Date().toLocaleString()}`);
@@ -305,12 +393,15 @@ app.get('/api/export/:type', auth, (req,res)=>{
   lines.push(`Cash reserve: $${a.cashReserve.toFixed(2)}`);
   lines.push(`Current bankroll: $${a.currentTotal.toFixed(2)}`);
   lines.push(`Net P/L: $${a.netPnL.toFixed(2)} (${a.roi.toFixed(2)}%)`);
-  lines.push(''); lines.push('## Sportsbooks');
-  bks.forEach(b=> lines.push(`- ${b.name}: current $${Number(b.current_balance).toFixed(2)}, start $${Number(b.starting_balance).toFixed(2)}, P/L $${(Number(b.current_balance)-Number(b.starting_balance)).toFixed(2)}`));
+  lines.push(`Season high: $${a.seasonHigh.toFixed(2)}`);
+  lines.push(`Season low: $${a.seasonLow.toFixed(2)}`);
+  lines.push(`Current drawdown: $${a.currentDrawdown.toFixed(2)} (${a.currentDrawdownPct.toFixed(2)}%)`);
+  lines.push(''); lines.push('## Sportsbook Performance Rankings');
+  a.booksRanked.forEach((b,i)=> lines.push(`${i+1}. ${b.name}: current $${b.current.toFixed(2)}, start $${b.starting.toFixed(2)}, P/L $${b.pnl.toFixed(2)}, ROI ${b.roi.toFixed(2)}%, share ${b.share.toFixed(2)}%`));
   lines.push(''); lines.push('## Update Bankroll History');
-  snaps.forEach(s=> lines.push(`- ${s.snapshot_date}: $${s.balances.reduce((x,y)=>x+Number(y.balance),0).toFixed(2)} ${s.notes ? '- '+s.notes : ''}`));
+  snaps.forEach(s=> lines.push(`- ${s.snapshot_date}: $${(s.balances.reduce((x,y)=>x+Number(y.balance),0)+a.cashReserve).toFixed(2)} ${s.notes ? '- '+s.notes : ''}`));
   const body = type === 'txt' ? lines.map(l=>l.replace(/^#+\s*/,'')).join('\n') : lines.join('\n');
-  res.setHeader('Content-Type', type === 'html' ? 'text/html' : 'text/plain');
+  res.setHeader('Content-Type', 'text/plain');
   res.setHeader('Content-Disposition', `attachment; filename=bankroll-report.${type === 'txt' ? 'txt' : 'md'}`);
   res.send(body);
 });
