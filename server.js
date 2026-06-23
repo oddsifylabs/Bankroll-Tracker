@@ -253,6 +253,49 @@ app.post('/api/daily-close', auth, (req,res)=>{
     snapshots: snapshotHistory(25)
   });
 });
+
+app.post('/api/reset/snapshots', auth, (req,res)=>{
+  const { confirm } = req.body || {};
+  if (confirm !== 'RESET') return res.status(400).json({ error:'Type RESET to confirm snapshot reset.' });
+  const tx = db.transaction(() => {
+    const day0 = setting('initialAllocationDate') || new Date().toISOString().slice(0,10);
+    const activeBooks = books();
+    db.prepare('DELETE FROM snapshot_balances').run();
+    db.prepare('DELETE FROM daily_snapshots').run();
+    db.prepare('INSERT OR REPLACE INTO daily_snapshots(snapshot_date, notes) VALUES(?,?)').run(day0, 'Day 0 baseline restored after reset');
+    const snap = db.prepare('SELECT id FROM daily_snapshots WHERE snapshot_date=?').get(day0);
+    const ins = db.prepare('INSERT INTO snapshot_balances(snapshot_id, sportsbook_id, balance) VALUES(?,?,?)');
+    const upd = db.prepare('UPDATE sportsbooks SET current_balance=starting_balance, updated_at=CURRENT_TIMESTAMP WHERE id=?');
+    activeBooks.forEach(b => { ins.run(snap.id, b.id, Number(b.starting_balance||0)); upd.run(b.id); });
+  });
+  tx();
+  res.json({ ok:true, message:'Snapshot history reset to Day 0 baseline.' });
+});
+
+app.post('/api/reset/all', auth, (req,res)=>{
+  const { confirm } = req.body || {};
+  if (confirm !== 'DELETE') return res.status(400).json({ error:'Type DELETE to confirm full data reset.' });
+  const keepHash = setting('passwordHash');
+  const keepMode = setting('passwordMode');
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM snapshot_balances').run();
+    db.prepare('DELETE FROM daily_snapshots').run();
+    db.prepare('DELETE FROM sportsbooks').run();
+    db.prepare('DELETE FROM settings').run();
+    setSetting('handlerName', 'Bankroll Handler');
+    setSetting('closeTime', '21:00');
+    setSetting('timezone', 'America/Phoenix');
+    setSetting('setupComplete', 'false');
+    setSetting('startingBankroll', '0');
+    setSetting('cashReserve', '0');
+    setSetting('initialAllocationDate', new Date().toISOString().slice(0,10));
+    if (keepHash) setSetting('passwordHash', keepHash);
+    if (keepMode) setSetting('passwordMode', keepMode);
+  });
+  tx();
+  res.json({ ok:true, message:'All bankroll data reset. Security password preserved.' });
+});
+
 app.get('/api/export/:type', auth, (req,res)=>{
   const a = analytics(); const bks = books(); const snaps = allSnapshots(); const type = req.params.type;
   const lines = [];

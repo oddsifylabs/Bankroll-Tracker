@@ -62,3 +62,12 @@ If you are locked out:
 ## Day 0 Initial Allocation
 
 This build adds a first-run Day 0 setup flow. Enter your starting bankroll, sportsbook starting balances, and cash reserve/unallocated amount. The app validates that sportsbook balances plus cash reserve equals the starting bankroll, then saves a Day 0 snapshot. Future ROI, growth, drawdown, and reports use this baseline.
+
+## Data Reset Options
+
+Settings includes a Data Reset card with two guarded actions:
+
+- Reset Update History: deletes saved bankroll snapshots and restores sportsbook current balances to Day 0 starting balances. Type `RESET` to confirm.
+- Full Data Reset: deletes sportsbooks, snapshots, setup, and bankroll data while preserving the login password. Type `DELETE` to confirm.
+
+Use exports before resetting if you need an archive.
