@@ -57,7 +57,15 @@ function init() {
   if (!get.get('closeTime')) set.run('closeTime', '21:00');
   if (!get.get('timezone')) set.run('timezone', 'America/Phoenix');
   if (!get.get('setupComplete')) set.run('setupComplete', 'false');
-  if (!get.get('passwordHash')) set.run('passwordHash', bcrypt.hashSync(ADMIN_PASSWORD, 10));
+  // Keep Railway ADMIN_PASSWORD authoritative. This avoids lockouts when the
+  // password is changed after the SQLite database already exists.
+  if (process.env.ADMIN_PASSWORD) {
+    set.run('passwordHash', bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10));
+    set.run('passwordMode', 'railway-env');
+  } else if (!get.get('passwordHash')) {
+    set.run('passwordHash', bcrypt.hashSync(ADMIN_PASSWORD, 10));
+    set.run('passwordMode', 'default-admin');
+  }
 }
 init();
 
@@ -108,13 +116,14 @@ function analytics() {
 
 app.post('/api/login', (req,res)=>{
   const { password } = req.body || {};
-  if (!bcrypt.compareSync(password || '', setting('passwordHash'))) return res.status(401).json({ error: 'Invalid password' });
+  if (!bcrypt.compareSync(String(password || '').trim(), setting('passwordHash'))) return res.status(401).json({ error: 'Invalid password. Check Railway ADMIN_PASSWORD, then redeploy.' });
   const token = jwt.sign({ role: 'admin' }, SESSION_SECRET, { expiresIn: '12h' });
   res.cookie('bt_session', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 12*60*60*1000 });
   res.json({ ok:true });
 });
 app.post('/api/logout', (req,res)=>{ res.clearCookie('bt_session'); res.json({ ok:true }); });
 app.get('/api/me', auth, (req,res)=> res.json({ ok:true }));
+app.get('/api/auth-status', (req,res)=> res.json({ ok:true, hasRailwayPassword: Boolean(process.env.ADMIN_PASSWORD), passwordMode: setting('passwordMode') || 'unknown' }));
 
 app.get('/api/state', auth, (req,res)=>{
   res.json({

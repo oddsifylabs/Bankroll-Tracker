@@ -1,4 +1,4 @@
-# Bankroll Accounting Pro
+# Bankroll Accounting Pro - Login Fix
 
 Railway-ready sportsbook bankroll management app. This version intentionally removes the bet logger and focuses on daily bankroll accounting.
 
@@ -44,3 +44,16 @@ npm start
 ```
 
 Open `http://localhost:3000`.
+
+
+## Login Fix Notes
+
+This build makes the Railway `ADMIN_PASSWORD` variable authoritative on every deploy. If you change `ADMIN_PASSWORD` in Railway, redeploy and the app will accept the new password.
+
+If you are locked out:
+
+1. Railway -> Variables -> set `ADMIN_PASSWORD` to a simple test value with no quotes, such as `Test12345!`
+2. Redeploy the latest deployment.
+3. Open the site in a private/incognito window.
+4. Login with exactly that value.
+5. Change it later to a stronger password.
