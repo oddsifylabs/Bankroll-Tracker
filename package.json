@@ -1,7 +1,7 @@
 {
   "name": "bankroll-accounting-pro",
   "version": "2.2.0",
-  "description": "Railway-ready sportsbook bankroll accounting app with daily close snapshots and analytics.",
+  "description": "Railway-ready sportsbook bankroll accounting app with bankroll snapshots and analytics.",
   "main": "server.js",
   "engines": {
     "node": "20.x"

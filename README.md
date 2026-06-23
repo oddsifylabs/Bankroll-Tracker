@@ -8,7 +8,7 @@ Railway-ready sportsbook bankroll management app. This version intentionally rem
 - Handler profile
 - Up to 10 sportsbooks
 - Starting bankroll baseline
-- 9 PM daily close workflow
+- 9 PM bankroll update workflow
 - Daily balance snapshots
 - Running totals, ROI, weekly/monthly P/L
 - Drawdown, best/worst day, sportsbook rankings

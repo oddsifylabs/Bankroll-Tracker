@@ -204,7 +204,14 @@ app.post('/api/daily-close', auth, (req,res)=>{
     const upd = db.prepare('UPDATE sportsbooks SET current_balance=?, updated_at=CURRENT_TIMESTAMP WHERE id=?');
     balances.forEach(b => { ins.run(snap.id, Number(b.sportsbook_id), Number(b.balance)); upd.run(Number(b.balance), Number(b.sportsbook_id)); });
   });
-  tx(); res.json({ ok:true });
+  tx();
+  res.json({
+    ok:true,
+    settings: { handlerName: setting('handlerName'), closeTime: setting('closeTime'), timezone: setting('timezone'), setupComplete: setting('setupComplete') === 'true', startingBankroll: Number(setting('startingBankroll') || 0), cashReserve: Number(setting('cashReserve') || 0), initialAllocationDate: setting('initialAllocationDate') },
+    sportsbooks: books(),
+    latestSnapshot: latestSnapshot(),
+    analytics: analytics()
+  });
 });
 app.get('/api/export/:type', auth, (req,res)=>{
   const a = analytics(); const bks = books(); const snaps = allSnapshots(); const type = req.params.type;
@@ -217,7 +224,7 @@ app.get('/api/export/:type', auth, (req,res)=>{
   lines.push(`Net P/L: $${a.netPnL.toFixed(2)} (${a.roi.toFixed(2)}%)`);
   lines.push(''); lines.push('## Sportsbooks');
   bks.forEach(b=> lines.push(`- ${b.name}: current $${Number(b.current_balance).toFixed(2)}, start $${Number(b.starting_balance).toFixed(2)}, P/L $${(Number(b.current_balance)-Number(b.starting_balance)).toFixed(2)}`));
-  lines.push(''); lines.push('## Daily Close History');
+  lines.push(''); lines.push('## Update Bankroll History');
   snaps.forEach(s=> lines.push(`- ${s.snapshot_date}: $${s.balances.reduce((x,y)=>x+Number(y.balance),0).toFixed(2)} ${s.notes ? '- '+s.notes : ''}`));
   const body = type === 'txt' ? lines.map(l=>l.replace(/^#+\s*/,'')).join('\n') : lines.join('\n');
   res.setHeader('Content-Type', type === 'html' ? 'text/html' : 'text/plain');
