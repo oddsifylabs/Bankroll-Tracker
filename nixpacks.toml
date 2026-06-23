@@ -1,8 +1,5 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "python3", "gcc", "gnumake", "pkg-config"]
+nixPkgs = ["nodejs_20", "python311", "gcc", "gnumake", "pkg-config"]
 
 [phases.install]
-cmds = ["npm install"]
-
-[start]
-cmd = "npm start"
+cmds = ["npm ci --omit=dev || npm install --omit=dev"]

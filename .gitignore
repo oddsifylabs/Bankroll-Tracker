@@ -1,5 +1,5 @@
-node_modules
-.env
+node_modules/
 data/*.db
-npm-debug.log*
+data/*.sqlite
+.env
 .DS_Store
