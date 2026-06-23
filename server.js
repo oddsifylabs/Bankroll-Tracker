@@ -57,6 +57,9 @@ function init() {
   if (!get.get('closeTime')) set.run('closeTime', '21:00');
   if (!get.get('timezone')) set.run('timezone', 'America/Phoenix');
   if (!get.get('setupComplete')) set.run('setupComplete', 'false');
+  if (!get.get('startingBankroll')) set.run('startingBankroll', '0');
+  if (!get.get('cashReserve')) set.run('cashReserve', '0');
+  if (!get.get('initialAllocationDate')) set.run('initialAllocationDate', new Date().toISOString().slice(0,10));
   // Keep Railway ADMIN_PASSWORD authoritative. This avoids lockouts when the
   // password is changed after the SQLite database already exists.
   if (process.env.ADMIN_PASSWORD) {
@@ -98,10 +101,13 @@ function allSnapshots() {
 }
 function analytics() {
   const bks = books();
-  const startTotal = bks.reduce((a,b)=>a+Number(b.starting_balance||0),0);
-  const currentTotal = bks.reduce((a,b)=>a+Number(b.current_balance||0),0);
+  const configuredStart = Number(setting('startingBankroll') || 0);
+  const cashReserve = Number(setting('cashReserve') || 0);
+  const bookStartTotal = bks.reduce((a,b)=>a+Number(b.starting_balance||0),0);
+  const startTotal = configuredStart || (bookStartTotal + cashReserve);
+  const currentTotal = bks.reduce((a,b)=>a+Number(b.current_balance||0),0) + cashReserve;
   const snaps = allSnapshots();
-  const series = snaps.map(s => ({ date: s.snapshot_date, total: s.balances.reduce((a,b)=>a+Number(b.balance||0),0) }));
+  const series = snaps.map(s => ({ date: s.snapshot_date, total: s.balances.reduce((a,b)=>a+Number(b.balance||0),0) + cashReserve }));
   const daily = series.map((p,i)=>({ date:p.date, total:p.total, pnl: i===0 ? p.total - startTotal : p.total - series[i-1].total }));
   const weekPnL = daily.slice(-7).reduce((a,d)=>a+d.pnl,0);
   const monthPnL = daily.slice(-30).reduce((a,d)=>a+d.pnl,0);
@@ -111,7 +117,7 @@ function analytics() {
   const worst = daily.length ? daily.reduce((a,b)=>b.pnl<a.pnl?b:a,daily[0]) : null;
   const yesterday = daily.length ? daily[daily.length-1].pnl : currentTotal - startTotal;
   const booksRanked = bks.map(b => ({ id:b.id, name:b.name, starting:Number(b.starting_balance), current:Number(b.current_balance), pnl:Number(b.current_balance)-Number(b.starting_balance), roi:Number(b.starting_balance) ? ((Number(b.current_balance)-Number(b.starting_balance))/Number(b.starting_balance))*100 : 0, share: currentTotal ? Number(b.current_balance)/currentTotal*100 : 0 })).sort((a,b)=>b.pnl-a.pnl);
-  return { startTotal, currentTotal, netPnL: currentTotal-startTotal, roi: startTotal ? (currentTotal-startTotal)/startTotal*100 : 0, todayPnL: yesterday, weekPnL, monthPnL, maxDrawdown, best, worst, series, daily, booksRanked, snapshotCount: snaps.length };
+  return { startTotal, cashReserve, bookStartTotal, currentTotal, netPnL: currentTotal-startTotal, roi: startTotal ? (currentTotal-startTotal)/startTotal*100 : 0, todayPnL: yesterday, weekPnL, monthPnL, maxDrawdown, best, worst, series, daily, booksRanked, snapshotCount: snaps.length };
 }
 
 app.post('/api/login', (req,res)=>{
@@ -127,24 +133,38 @@ app.get('/api/auth-status', (req,res)=> res.json({ ok:true, hasRailwayPassword: 
 
 app.get('/api/state', auth, (req,res)=>{
   res.json({
-    settings: { handlerName: setting('handlerName'), closeTime: setting('closeTime'), timezone: setting('timezone'), setupComplete: setting('setupComplete') === 'true' },
+    settings: { handlerName: setting('handlerName'), closeTime: setting('closeTime'), timezone: setting('timezone'), setupComplete: setting('setupComplete') === 'true', startingBankroll: Number(setting('startingBankroll') || 0), cashReserve: Number(setting('cashReserve') || 0), initialAllocationDate: setting('initialAllocationDate') },
     sportsbooks: books(),
     latestSnapshot: latestSnapshot(),
     analytics: analytics()
   });
 });
 app.post('/api/setup', auth, (req,res)=>{
-  const { handlerName, closeTime, timezone, sportsbooks } = req.body || {};
+  const { handlerName, closeTime, timezone, startingBankroll, cashReserve=0, initialAllocationDate, sportsbooks } = req.body || {};
   if (handlerName) setSetting('handlerName', handlerName);
   if (closeTime) setSetting('closeTime', closeTime);
   if (timezone) setSetting('timezone', timezone);
   if (!Array.isArray(sportsbooks) || sportsbooks.length < 1 || sportsbooks.length > 10) return res.status(400).json({ error:'Add 1 to 10 sportsbooks.' });
+  const start = Number(startingBankroll || 0);
+  const reserve = Number(cashReserve || 0);
+  const booksTotal = sportsbooks.reduce((sum,b)=>sum+Number(b.starting_balance || 0),0);
+  if (start <= 0) return res.status(400).json({ error:'Enter a starting bankroll greater than 0.' });
+  if (reserve < 0) return res.status(400).json({ error:'Cash reserve cannot be negative.' });
+  if (Math.abs((booksTotal + reserve) - start) > 0.01) return res.status(400).json({ error:`Initial allocation must equal starting bankroll. Books plus cash reserve is $${(booksTotal+reserve).toFixed(2)}, starting bankroll is $${start.toFixed(2)}.` });
   const tx = db.transaction(() => {
     db.prepare('DELETE FROM snapshot_balances').run();
     db.prepare('DELETE FROM daily_snapshots').run();
     db.prepare('DELETE FROM sportsbooks').run();
     const stmt = db.prepare('INSERT INTO sportsbooks(name, starting_balance, current_balance) VALUES(?,?,?)');
     sportsbooks.slice(0,10).forEach(b => stmt.run(String(b.name||'Book').trim(), Number(b.starting_balance || 0), Number(b.starting_balance || 0)));
+    setSetting('startingBankroll', start.toFixed(2));
+    setSetting('cashReserve', reserve.toFixed(2));
+    setSetting('initialAllocationDate', initialAllocationDate || new Date().toISOString().slice(0,10));
+    db.prepare('INSERT OR REPLACE INTO daily_snapshots(snapshot_date, notes) VALUES(?,?)').run(initialAllocationDate || new Date().toISOString().slice(0,10), 'Day 0 initial allocation');
+    const snap = db.prepare('SELECT id FROM daily_snapshots WHERE snapshot_date=?').get(initialAllocationDate || new Date().toISOString().slice(0,10));
+    const allBooks = db.prepare('SELECT id, starting_balance FROM sportsbooks WHERE active=1 ORDER BY id').all();
+    const ins = db.prepare('INSERT OR REPLACE INTO snapshot_balances(snapshot_id, sportsbook_id, balance) VALUES(?,?,?)');
+    allBooks.forEach(b => ins.run(snap.id, b.id, Number(b.starting_balance || 0)));
     setSetting('setupComplete', 'true');
   });
   tx();
@@ -192,6 +212,7 @@ app.get('/api/export/:type', auth, (req,res)=>{
   lines.push(`# Bankroll Report - ${setting('handlerName')}`);
   lines.push(`Generated: ${new Date().toLocaleString()}`);
   lines.push(`Starting bankroll: $${a.startTotal.toFixed(2)}`);
+  lines.push(`Cash reserve: $${a.cashReserve.toFixed(2)}`);
   lines.push(`Current bankroll: $${a.currentTotal.toFixed(2)}`);
   lines.push(`Net P/L: $${a.netPnL.toFixed(2)} (${a.roi.toFixed(2)}%)`);
   lines.push(''); lines.push('## Sportsbooks');

@@ -57,3 +57,8 @@ If you are locked out:
 3. Open the site in a private/incognito window.
 4. Login with exactly that value.
 5. Change it later to a stronger password.
+
+
+## Day 0 Initial Allocation
+
+This build adds a first-run Day 0 setup flow. Enter your starting bankroll, sportsbook starting balances, and cash reserve/unallocated amount. The app validates that sportsbook balances plus cash reserve equals the starting bankroll, then saves a Day 0 snapshot. Future ROI, growth, drawdown, and reports use this baseline.
