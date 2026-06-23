@@ -120,6 +120,42 @@ function analytics() {
   return { startTotal, cashReserve, bookStartTotal, currentTotal, netPnL: currentTotal-startTotal, roi: startTotal ? (currentTotal-startTotal)/startTotal*100 : 0, todayPnL: yesterday, weekPnL, monthPnL, maxDrawdown, best, worst, series, daily, booksRanked, snapshotCount: snaps.length };
 }
 
+function verification() {
+  const dbPath = path.join(DATA_DIR, 'bankroll.sqlite');
+  const walPath = dbPath + '-wal';
+  const shmPath = dbPath + '-shm';
+  const latest = db.prepare('SELECT snapshot_date, created_at FROM daily_snapshots ORDER BY created_at DESC, id DESC LIMIT 1').get();
+  const count = db.prepare('SELECT COUNT(*) c FROM daily_snapshots').get().c;
+  const size = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0;
+  return {
+    storage: DATA_DIR,
+    database: path.basename(dbPath),
+    databaseExists: fs.existsSync(dbPath),
+    databaseSizeBytes: size,
+    walExists: fs.existsSync(walPath),
+    shmExists: fs.existsSync(shmPath),
+    latestSnapshotDate: latest ? latest.snapshot_date : null,
+    lastSavedAt: latest ? latest.created_at : null,
+    snapshotCount: count
+  };
+}
+
+function snapshotHistory(limit = 25) {
+  const snaps = db.prepare('SELECT * FROM daily_snapshots ORDER BY snapshot_date DESC, id DESC LIMIT ?').all(limit);
+  const stmt = db.prepare(`SELECT sb.*, s.name FROM snapshot_balances sb JOIN sportsbooks s ON s.id=sb.sportsbook_id WHERE snapshot_id=? ORDER BY s.id`);
+  return snaps.map(s => {
+    const balances = stmt.all(s.id);
+    return {
+      id: s.id,
+      snapshot_date: s.snapshot_date,
+      created_at: s.created_at,
+      notes: s.notes || '',
+      total: balances.reduce((sum, b) => sum + Number(b.balance || 0), 0) + Number(setting('cashReserve') || 0),
+      balances
+    };
+  });
+}
+
 app.post('/api/login', (req,res)=>{
   const { password } = req.body || {};
   if (!bcrypt.compareSync(String(password || '').trim(), setting('passwordHash'))) return res.status(401).json({ error: 'Invalid password. Check Railway ADMIN_PASSWORD, then redeploy.' });
@@ -136,7 +172,9 @@ app.get('/api/state', auth, (req,res)=>{
     settings: { handlerName: setting('handlerName'), closeTime: setting('closeTime'), timezone: setting('timezone'), setupComplete: setting('setupComplete') === 'true', startingBankroll: Number(setting('startingBankroll') || 0), cashReserve: Number(setting('cashReserve') || 0), initialAllocationDate: setting('initialAllocationDate') },
     sportsbooks: books(),
     latestSnapshot: latestSnapshot(),
-    analytics: analytics()
+    analytics: analytics(),
+    verification: verification(),
+    snapshots: snapshotHistory(25)
   });
 });
 app.post('/api/setup', auth, (req,res)=>{
@@ -210,7 +248,9 @@ app.post('/api/daily-close', auth, (req,res)=>{
     settings: { handlerName: setting('handlerName'), closeTime: setting('closeTime'), timezone: setting('timezone'), setupComplete: setting('setupComplete') === 'true', startingBankroll: Number(setting('startingBankroll') || 0), cashReserve: Number(setting('cashReserve') || 0), initialAllocationDate: setting('initialAllocationDate') },
     sportsbooks: books(),
     latestSnapshot: latestSnapshot(),
-    analytics: analytics()
+    analytics: analytics(),
+    verification: verification(),
+    snapshots: snapshotHistory(25)
   });
 });
 app.get('/api/export/:type', auth, (req,res)=>{
