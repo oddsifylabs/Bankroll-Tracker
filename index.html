@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bankroll Role Tracker</title>
+  <style>
+    :root{
+      --bg:#090b0d; --panel:#12161a; --panel2:#171d22; --line:#283038;
+      --text:#e8f0ec; --muted:#9aa5a0; --green:#27e087; --green2:#0f9f5d;
+      --danger:#ff5d6c; --warn:#ffcc66; --shadow:0 20px 60px rgba(0,0,0,.35);
+      --radius:22px;
+    }
+    *{box-sizing:border-box} html{scroll-behavior:smooth}
+    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:radial-gradient(circle at top left,#16231d 0,#090b0d 38%,#050607 100%);color:var(--text);padding-bottom:92px}
+    body.locked{overflow:hidden}.hide{display:none!important}
+    header{position:sticky;top:0;z-index:20;background:rgba(9,11,13,.88);backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}
+    .bar{max-width:1220px;margin:auto;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+    .brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,var(--green),#075c38);box-shadow:0 0 30px rgba(39,224,135,.25);display:grid;place-items:center;color:#03120b;font-weight:900}
+    h1{font-size:18px;margin:0}.sub{color:var(--muted);font-size:12px;margin-top:2px}.pill{border:1px solid var(--line);background:var(--panel2);padding:9px 12px;border-radius:999px;color:var(--muted);font-size:13px}.pill b{color:var(--green)}
+    main{max-width:1220px;margin:0 auto;padding:20px 18px 110px}.section{display:none}.section.active{display:block}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.card{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015));border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);min-height:120px}.card.wide{grid-column:span 2}.card.full{grid-column:1/-1}
+    h2{font-size:24px;margin:0 0 8px}h3{font-size:15px;margin:0 0 14px;color:#d9e7df}.muted{color:var(--muted)}.big{font-size:30px;font-weight:900;letter-spacing:-.04em}.green{color:var(--green)}.danger{color:var(--danger)}.warn{color:var(--warn)}
+    label{display:block;color:var(--muted);font-size:12px;margin:12px 0 6px}input,select,textarea{width:100%;background:#090c0f;color:var(--text);border:1px solid #2b333b;border-radius:14px;padding:12px 13px;outline:none}textarea{min-height:120px;resize:vertical}input:focus,select:focus,textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(39,224,135,.12)}
+    button{border:0;border-radius:14px;padding:12px 14px;font-weight:800;cursor:pointer;color:#06120b;background:var(--green)}button.secondary{background:#20272d;color:var(--text);border:1px solid var(--line)}button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}button.dangerBtn{background:var(--danger);color:#180406}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.split{display:flex;align-items:center;justify-content:space-between;gap:12px}.tiny{font-size:12px;color:var(--muted)}
+    table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:11px 8px;border-bottom:1px solid var(--line);font-size:13px}th{color:var(--muted);font-weight:700}.bookline{display:grid;grid-template-columns:1.4fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:10px}.metric{padding:14px;border-radius:18px;background:#0b0f12;border:1px solid var(--line)}.metric span{display:block;color:var(--muted);font-size:12px;margin-bottom:7px}.metric strong{font-size:22px}.progress{height:12px;background:#080a0c;border:1px solid var(--line);border-radius:999px;overflow:hidden}.progress i{display:block;height:100%;background:linear-gradient(90deg,var(--green2),var(--green));width:0%}
+    canvas{width:100%;height:240px;background:#080b0e;border:1px solid var(--line);border-radius:18px}.footerNav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(9,11,13,.92);border-top:1px solid var(--line);backdrop-filter:blur(18px)}.navInner{max-width:760px;margin:auto;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:10px}.navInner button{background:transparent;color:var(--muted);border:1px solid transparent;padding:10px 6px;font-size:12px}.navInner button.active{color:var(--green);border-color:rgba(39,224,135,.3);background:rgba(39,224,135,.08)}footer.sticky{position:sticky;bottom:78px;background:rgba(9,11,13,.7);border-top:1px solid var(--line);backdrop-filter:blur(12px);padding:10px 18px;color:var(--muted);font-size:12px;text-align:center}
+    .lock{position:fixed;inset:0;z-index:99;background:radial-gradient(circle at top,#143423,#060708 48%);display:grid;place-items:center;padding:20px}.lockBox{max-width:440px;width:100%;background:rgba(18,22,26,.96);border:1px solid var(--line);border-radius:28px;padding:24px;box-shadow:var(--shadow)}.disclaimer{font-size:12px;line-height:1.45;color:var(--muted);border:1px solid var(--line);background:#0a0d10;border-radius:16px;padding:12px;margin:14px 0}
+    @media(max-width:920px){.grid{grid-template-columns:repeat(2,1fr)}.card.wide{grid-column:1/-1}.bookline{grid-template-columns:1fr 1fr}.hideMobile{display:none}}
+    @media(max-width:620px){.grid{grid-template-columns:1fr}.bar{align-items:flex-start;flex-direction:column}.bookline{grid-template-columns:1fr}.big{font-size:26px}.navInner{grid-template-columns:repeat(5,1fr)}}
+    @media print{.footerNav,button,.lock,footer.sticky{display:none!important}body{background:#fff;color:#000;padding:0}.card{box-shadow:none;border-color:#bbb;background:#fff}header{position:static;background:#fff}.section{display:block!important}input,select,textarea{border-color:#aaa;color:#000;background:#fff}}
+  </style>
+</head>
+<body class="locked">
+  <div id="lock" class="lock">
+    <div class="lockBox">
+      <div class="brand"><div class="logo">BR</div><div><h1>Bankroll Role Tracker</h1><div class="sub">Private sportsbook bankroll dashboard</div></div></div>
+      <div class="disclaimer"><b>Sports bettor disclaimer:</b> This tracker is for recordkeeping only and is not financial, betting, tax, or legal advice. Sports betting involves risk and losses are possible. Bet responsibly, follow your local laws, and seek help if gambling stops being fun.</div>
+      <label>Handler name</label><input id="handlerInput" placeholder="Example: Jesse" autocomplete="username" />
+      <label>Access code</label><input id="pinInput" type="password" placeholder="Create or enter your code" autocomplete="current-password" />
+      <div class="row" style="margin-top:14px"><button onclick="unlockApp()">Unlock</button><button class="secondary" onclick="resetLock()">Reset App</button></div>
+      <p class="tiny">First unlock creates your local access code. Data is saved in this browser with localStorage.</p>
+    </div>
+  </div>
+
+  <header>
+    <div class="bar">
+      <div class="brand"><div class="logo">BR</div><div><h1>Bankroll Role Tracker</h1><div id="handlerLine" class="sub">Ready</div></div></div>
+      <div class="row"><span class="pill">Total: <b id="topTotal">$0.00</b></span><span class="pill hideMobile">Last close: <b id="lastClose">None</b></span></div>
+    </div>
+  </header>
+
+  <main>
+    <section id="dashboard" class="section active">
+      <div class="grid">
+        <div class="card"><span class="muted">Current Bankroll</span><div id="currentTotal" class="big green">$0.00</div><div id="currentDelta" class="tiny">No entries yet.</div></div>
+        <div class="card"><span class="muted">Starting Bankroll</span><div id="startTotal" class="big">$0.00</div><div class="tiny">Set once in setup. You can edit anytime.</div></div>
+        <div class="card"><span class="muted">Profit / Loss</span><div id="profitLoss" class="big">$0.00</div><div id="roiLine" class="tiny">ROI: 0%</div></div>
+        <div class="card wide"><h3>Bankroll Trend</h3><canvas id="trendCanvas" width="900" height="260"></canvas></div>
+        <div class="card"><h3>Daily 9 PM Close</h3><p id="closePrompt" class="muted">Enter closing amounts once your books are finalized.</p><button onclick="showSection('close')">Enter Closing Amounts</button></div>
+      </div>
+    </section>
+
+    <section id="setup" class="section">
+      <div class="grid">
+        <div class="card full"><h2>Setup</h2><p class="muted">Add up to 10 sportsbooks and your starting bankroll for each one.</p></div>
+        <div class="card full"><div id="bookList"></div><div class="row"><button onclick="addBook()">Add Sportsbook</button><button class="secondary" onclick="saveSetup()">Save Setup</button></div></div>
+      </div>
+    </section>
+
+    <section id="close" class="section">
+      <div class="grid">
+        <div class="card full"><div class="split"><div><h2>9 PM Closing Entry</h2><p class="muted">Record the final balance in each sportsbook. You can enter earlier or later if needed.</p></div><button onclick="fillFromCurrent()" class="secondary">Use Previous Amounts</button></div></div>
+        <div class="card full"><label>Closing date</label><input id="closeDate" type="date" /><div id="closeFields"></div><div class="row"><button onclick="saveClose()">Save Close</button><button class="ghost" onclick="showSection('dashboard')">Cancel</button></div></div>
+      </div>
+    </section>
+
+    <section id="analytics" class="section">
+      <div class="grid">
+        <div class="card"><div class="metric"><span>Best Day</span><strong id="bestDay">—</strong></div></div>
+        <div class="card"><div class="metric"><span>Worst Day</span><strong id="worstDay">—</strong></div></div>
+        <div class="card"><div class="metric"><span>Average Daily Change</span><strong id="avgDaily">$0.00</strong></div></div>
+        <div class="card"><div class="metric"><span>Win Days</span><strong id="winDays">0</strong></div></div>
+        <div class="card"><div class="metric"><span>Loss Days</span><strong id="lossDays">0</strong></div></div>
+        <div class="card"><div class="metric"><span>Largest Book</span><strong id="largestBook">—</strong></div></div>
+        <div class="card full"><h3>Sportsbook Allocation</h3><div id="allocations"></div></div>
+        <div class="card full"><h3>History</h3><div style="overflow:auto"><table id="historyTable"></table></div></div>
+      </div>
+    </section>
+
+    <section id="export" class="section">
+      <div class="grid">
+        <div class="card"><h3>Export PDF</h3><p class="muted">Uses your browser print dialog. Choose “Save as PDF”.</p><button onclick="window.print()">Export PDF</button></div>
+        <div class="card"><h3>Export Markdown</h3><p class="muted">Download a clean `.md` report.</p><button onclick="downloadReport('md')">Export MD</button></div>
+        <div class="card"><h3>Export Text</h3><p class="muted">Download a plain `.txt` report.</p><button onclick="downloadReport('txt')">Export TXT</button></div>
+        <div class="card full"><h3>Report Preview</h3><textarea id="reportPreview" readonly></textarea></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="sticky">For tracking only. Gamble responsibly. Need help? Contact your local responsible gambling support service.</footer>
+  <nav class="footerNav"><div class="navInner">
+    <button class="active" onclick="showSection('dashboard')">Dashboard</button><button onclick="showSection('setup')">Setup</button><button onclick="showSection('close')">Close</button><button onclick="showSection('analytics')">Analytics</button><button onclick="showSection('export')">Export</button>
+  </div></nav>
+
+<script>
+const KEY='bankroll_role_tracker_v1';
+let state={handler:'',pin:'',books:[],history:[]};
+const $=id=>document.getElementById(id);
+const money=n=>(Number(n)||0).toLocaleString(undefined,{style:'currency',currency:'USD'});
+const today=()=>new Date().toISOString().slice(0,10);
+function load(){state=JSON.parse(localStorage.getItem(KEY)||JSON.stringify(state));}
+function persist(){localStorage.setItem(KEY,JSON.stringify(state));}
+function resetLock(){ if(confirm('Delete all local tracker data?')){localStorage.removeItem(KEY); location.reload();}}
+function unlockApp(){load(); const h=$('handlerInput').value.trim(); const pin=$('pinInput').value.trim(); if(!h||!pin) return alert('Enter a handler name and access code.'); if(state.pin && pin!==state.pin) return alert('Wrong access code.'); state.handler=h; if(!state.pin) state.pin=pin; persist(); document.body.classList.remove('locked'); $('lock').classList.add('hide'); if(!state.books.length){state.books=[{name:'DraftKings',start:0,current:0},{name:'FanDuel',start:0,current:0}]; persist();} init();}
+function init(){ $('handlerLine').textContent='Handler: '+state.handler; $('closeDate').value=today(); renderSetup(); renderClose(); renderAll(); maybePrompt(); }
+function showSection(id){document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id===id)); document.querySelectorAll('.navInner button').forEach(b=>b.classList.toggle('active',b.textContent.toLowerCase()===id)); if(id==='export') $('reportPreview').value=makeReport('md'); renderAll();}
+function addBook(){ if(state.books.length>=10) return alert('Maximum 10 sportsbooks.'); state.books.push({name:'Sportsbook '+(state.books.length+1),start:0,current:0}); renderSetup(); }
+function removeBook(i){state.books.splice(i,1); renderSetup();}
+function renderSetup(){ $('bookList').innerHTML=state.books.map((b,i)=>`<div class="bookline"><div><label>Sportsbook ${i+1}</label><input value="${esc(b.name)}" onchange="state.books[${i}].name=this.value"></div><div><label>Starting bankroll</label><input type="number" step="0.01" value="${b.start}" onchange="state.books[${i}].start=parseFloat(this.value)||0"></div><div><label>Current amount</label><input type="number" step="0.01" value="${b.current}" onchange="state.books[${i}].current=parseFloat(this.value)||0"></div><button class="dangerBtn" onclick="removeBook(${i})">Remove</button></div>`).join('');}
+function saveSetup(){state.books.forEach(b=>{b.start=+b.start||0;b.current=+b.current||b.start||0}); persist(); renderAll(); alert('Setup saved.');}
+function renderClose(){ $('closeFields').innerHTML=state.books.map((b,i)=>`<label>${esc(b.name)} closing amount</label><input class="closeInput" data-i="${i}" type="number" step="0.01" value="${b.current||b.start||0}">`).join('');}
+function fillFromCurrent(){document.querySelectorAll('.closeInput').forEach(inp=>{const b=state.books[inp.dataset.i]; inp.value=b.current||b.start||0;});}
+function saveClose(){ const date=$('closeDate').value||today(); const amounts={}; document.querySelectorAll('.closeInput').forEach(inp=>{const b=state.books[inp.dataset.i]; const val=parseFloat(inp.value)||0; b.current=val; amounts[b.name]=val;}); const total=sumCurrent(); const existing=state.history.findIndex(h=>h.date===date); const rec={date,amounts,total}; if(existing>=0) state.history[existing]=rec; else state.history.push(rec); state.history.sort((a,b)=>a.date.localeCompare(b.date)); persist(); renderClose(); renderAll(); showSection('dashboard'); alert('Closing amounts saved.');}
+function sumStart(){return state.books.reduce((a,b)=>a+(+b.start||0),0)} function sumCurrent(){return state.books.reduce((a,b)=>a+(+b.current||0),0)}
+function renderAll(){ const start=sumStart(), cur=sumCurrent(), pl=cur-start, roi=start?pl/start*100:0; $('topTotal').textContent=money(cur); $('currentTotal').textContent=money(cur); $('startTotal').textContent=money(start); $('profitLoss').textContent=money(pl); $('profitLoss').className='big '+(pl>=0?'green':'danger'); $('roiLine').textContent='ROI: '+roi.toFixed(2)+'%'; $('currentDelta').textContent=pl>=0?'Up '+money(pl)+' from start':'Down '+money(Math.abs(pl))+' from start'; $('lastClose').textContent=state.history.length?state.history[state.history.length-1].date:'None'; drawTrend(); renderAnalytics(); renderHistory(); renderAllocations(); $('reportPreview').value=makeReport('md');}
+function maybePrompt(){const hour=new Date().getHours(); const last=state.history.at(-1)?.date; $('closePrompt').textContent=(hour>=21 && last!==today())?'It is after 9 PM. Add today\'s closing amounts.':'Next close reminder: 9 PM local time.';}
+function renderAnalytics(){ const deltas=[]; let prev=sumStart(); state.history.forEach(h=>{deltas.push({date:h.date,delta:h.total-prev}); prev=h.total;}); const best=deltas.reduce((a,b)=>!a||b.delta>a.delta?b:a,null), worst=deltas.reduce((a,b)=>!a||b.delta<a.delta?b:a,null); $('bestDay').textContent=best?`${best.date} ${money(best.delta)}`:'—'; $('worstDay').textContent=worst?`${worst.date} ${money(worst.delta)}`:'—'; $('avgDaily').textContent=money(deltas.length?deltas.reduce((a,b)=>a+b.delta,0)/deltas.length:0); $('winDays').textContent=deltas.filter(d=>d.delta>0).length; $('lossDays').textContent=deltas.filter(d=>d.delta<0).length; const lb=[...state.books].sort((a,b)=>(b.current||0)-(a.current||0))[0]; $('largestBook').textContent=lb?lb.name:'—';}
+function renderAllocations(){const total=sumCurrent()||1; $('allocations').innerHTML=state.books.map(b=>{const pct=((b.current||0)/total*100); return `<div style="margin:12px 0"><div class="split"><span>${esc(b.name)}</span><b>${money(b.current)} · ${pct.toFixed(1)}%</b></div><div class="progress"><i style="width:${Math.min(100,pct)}%"></i></div></div>`}).join('');}
+function renderHistory(){let rows='<tr><th>Date</th><th>Total</th><th>Change</th></tr>'; let prev=sumStart(); state.history.forEach(h=>{const d=h.total-prev; rows+=`<tr><td>${h.date}</td><td>${money(h.total)}</td><td class="${d>=0?'green':'danger'}">${money(d)}</td></tr>`; prev=h.total;}); $('historyTable').innerHTML=rows;}
+function drawTrend(){const c=$('trendCanvas'),ctx=c.getContext('2d'),w=c.width,h=c.height; ctx.clearRect(0,0,w,h); const pts=[{date:'Start',total:sumStart()},...state.history]; const vals=pts.map(p=>p.total); const min=Math.min(...vals,0), max=Math.max(...vals,1); ctx.strokeStyle='#283038'; ctx.lineWidth=1; for(let i=0;i<5;i++){let y=20+i*(h-40)/4; ctx.beginPath();ctx.moveTo(20,y);ctx.lineTo(w-20,y);ctx.stroke();} ctx.strokeStyle='#27e087';ctx.lineWidth=4;ctx.beginPath(); pts.forEach((p,i)=>{const x=30+(pts.length===1?0:i*(w-60)/(pts.length-1)); const y=h-25-((p.total-min)/(max-min||1))*(h-55); if(i)ctx.lineTo(x,y);else ctx.moveTo(x,y);}); ctx.stroke(); ctx.fillStyle='#e8f0ec'; ctx.font='14px system-ui'; ctx.fillText(money(vals.at(-1)||0),30,22);}
+function makeReport(type){const lines=[]; lines.push('# Bankroll Role Tracker Report',''); lines.push('Handler: '+state.handler); lines.push('Generated: '+new Date().toLocaleString()); lines.push('Starting Bankroll: '+money(sumStart())); lines.push('Current Bankroll: '+money(sumCurrent())); lines.push('Profit / Loss: '+money(sumCurrent()-sumStart()),''); lines.push('## Sportsbooks'); state.books.forEach(b=>lines.push(`- ${b.name}: start ${money(b.start)}, current ${money(b.current)}`)); lines.push('','## History'); state.history.forEach(h=>lines.push(`- ${h.date}: ${money(h.total)}`)); lines.push('','Disclaimer: This tracker is for recordkeeping only and is not betting, financial, tax, or legal advice. Bet responsibly.'); return type==='txt'?lines.join('\n').replaceAll('#',''):lines.join('\n');}
+function downloadReport(type){const text=makeReport(type); const blob=new Blob([text],{type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='bankroll-report.'+type; a.click(); URL.revokeObjectURL(a.href);}
+function esc(s){return String(s||'').replace(/[&<>'"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[m]));}
+load(); if(state.pin){$('handlerInput').value=state.handler||'';} else {state.books=[];}
+</script>
+</body>
+</html>
